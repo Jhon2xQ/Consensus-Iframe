@@ -1,0 +1,89 @@
+import { FastifyRequest, FastifyReply } from 'fastify';
+import { keyManagementService } from '../services/key-management.service';
+import { ResponseBuilder } from '../types/response.types';
+
+interface CreateSharesBody {
+  userId: string;
+}
+
+interface SignBody {
+  userId: string;
+  share1: string;
+  message: string;
+}
+
+interface RecoveryBody {
+  userId: string;
+}
+
+class KeyManagementController {
+  private static instance: KeyManagementController;
+
+  private constructor() {}
+
+  static getInstance(): KeyManagementController {
+    if (!KeyManagementController.instance) {
+      KeyManagementController.instance = new KeyManagementController();
+    }
+    return KeyManagementController.instance;
+  }
+
+  async createShares(
+    request: FastifyRequest<{ Body: CreateSharesBody }>,
+    reply: FastifyReply
+  ): Promise<void> {
+    try {
+      const { userId } = request.body;
+      const result = await keyManagementService.createShares(userId);
+      
+      reply.code(201).send(
+        ResponseBuilder.success('Shares created successfully', result)
+      );
+    } catch (error: any) {
+      request.log.error(error);
+      reply.code(500).send(
+        ResponseBuilder.error(error?.message || 'Failed to create shares')
+      );
+    }
+  }
+
+  async sign(
+    request: FastifyRequest<{ Body: SignBody }>,
+    reply: FastifyReply
+  ): Promise<void> {
+    try {
+      const { userId, share1, message } = request.body;
+      const signature = await keyManagementService.signMessage(userId, share1, message);
+
+      reply.send(
+        ResponseBuilder.success('Message signed successfully', { signature })
+      );
+    } catch (error: any) {
+      request.log.error(error);
+      reply.code(500).send(
+        ResponseBuilder.error(error?.message || 'Failed to sign message')
+      );
+    }
+  }
+
+  async recovery(
+    request: FastifyRequest<{ Body: RecoveryBody }>,
+    reply: FastifyReply
+  ): Promise<void> {
+    try {
+      const { userId } = request.body;
+      const share1 = await keyManagementService.recoverShare(userId);
+
+      reply.send(
+        ResponseBuilder.success('Share recovered successfully', { share1 })
+      );
+    } catch (error: any) {
+      request.log.error(error);
+      reply.code(500).send(
+        ResponseBuilder.error(error?.message || 'Failed to recover share')
+      );
+    }
+  }
+}
+
+export const keyManagementController = KeyManagementController.getInstance();
