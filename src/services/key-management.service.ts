@@ -50,8 +50,21 @@ class KeyManagementService {
 
     const newSecretBytes = cryptoService.privateKeyToBytes(privateKey);
     const newShares = await cryptoService.splitSecret(newSecretBytes, 3, 2);
+    const [share11, share22, share33] = newShares.map((s) => cryptoService.encodeShare(s));
+    console.log(share22, share33);
 
-    return cryptoService.encodeShare(newShares[0]);
+    return share11;
+  }
+
+  async verifySignature(
+    message: string,
+    signature: string,
+    address: string,
+  ): Promise<{ valid: boolean; recoveredAddress: string }> {
+    const recoveredAddress = await cryptoService.recoverAddressFromSignature(message, signature);
+    const valid = recoveredAddress.toLowerCase() === address.toLowerCase();
+
+    return { valid, recoveredAddress };
   }
 }
 

@@ -9,8 +9,8 @@ class InfisicalService {
   private static instance: InfisicalService;
   private clients: Map<StorageType, InfisicalSDK> = new Map();
   private projectIds: Map<StorageType, string> = new Map();
+  private authenticated: Set<StorageType> = new Set();
   private readonly environment: string;
-  private isAuthenticated = false;
 
   private constructor() {
     this.environment = process.env.INFISICAL_ENVIRONMENT || 'dev';
@@ -49,16 +49,14 @@ class InfisicalService {
     }
 
     await client.auth().universalAuth.login({ clientId, clientSecret });
+    this.authenticated.add(type);
   }
 
   private async ensureReady(type: StorageType): Promise<void> {
     this.initializeClient(type);
-    if (!this.isAuthenticated) {
-      await Promise.all([
-        this.authenticate(StorageType.HOT),
-        this.authenticate(StorageType.COLD)
-      ]);
-      this.isAuthenticated = true;
+    
+    if (!this.authenticated.has(type)) {
+      await this.authenticate(type);
     }
   }
 

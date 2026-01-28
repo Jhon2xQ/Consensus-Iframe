@@ -1,15 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { keyManagementController } from '../controllers/key-management.controller';
 
-const responseSchema = {
-  type: 'object',
-  properties: {
-    success: { type: 'boolean' },
-    message: { type: 'string' },
-    data: { type: 'object' }
-  }
-};
-
 const keyManagementRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
   fastify.post('/create-shares', {
     schema: {
@@ -19,9 +10,6 @@ const keyManagementRoutes: FastifyPluginAsync = async (fastify): Promise<void> =
         properties: {
           userId: { type: 'string', minLength: 1 }
         }
-      },
-      response: {
-        201: responseSchema
       }
     }
   }, keyManagementController.createShares.bind(keyManagementController));
@@ -36,9 +24,6 @@ const keyManagementRoutes: FastifyPluginAsync = async (fastify): Promise<void> =
           share1: { type: 'string', minLength: 1 },
           message: { type: 'string', minLength: 1 }
         }
-      },
-      response: {
-        200: responseSchema
       }
     }
   }, keyManagementController.sign.bind(keyManagementController));
@@ -51,12 +36,23 @@ const keyManagementRoutes: FastifyPluginAsync = async (fastify): Promise<void> =
         properties: {
           userId: { type: 'string', minLength: 1 }
         }
-      },
-      response: {
-        200: responseSchema
       }
     }
   }, keyManagementController.recovery.bind(keyManagementController));
+
+  fastify.post('/verify', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['message', 'signature', 'address'],
+        properties: {
+          message: { type: 'string', minLength: 1 },
+          signature: { type: 'string', minLength: 1 },
+          address: { type: 'string', minLength: 1 }
+        }
+      }
+    }
+  }, keyManagementController.verify.bind(keyManagementController));
 };
 
 export default keyManagementRoutes;

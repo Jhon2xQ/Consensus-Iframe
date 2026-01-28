@@ -46,6 +46,28 @@ class CryptoService {
     const wallet = new ethers.Wallet(privateKey);
     return wallet.signMessage(message);
   }
+
+  async verifySignature(message: string, signature: string, address: string): Promise<boolean> {
+    try {
+      const recoveredAddress = ethers.verifyMessage(message, signature);
+      return recoveredAddress.toLowerCase() === address.toLowerCase();
+    } catch {
+      return false;
+    }
+  }
+
+  async recoverMessage(signature: string): Promise<string> {
+    try {
+      const messageHash = ethers.hashMessage(signature);
+      return messageHash;
+    } catch (error) {
+      throw new Error('Invalid signature format');
+    }
+  }
+
+  async recoverAddressFromSignature(message: string, signature: string): Promise<string> {
+    return ethers.verifyMessage(message, signature);
+  }
 }
 
 export const cryptoService = CryptoService.getInstance();

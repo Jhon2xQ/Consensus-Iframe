@@ -16,6 +16,12 @@ interface RecoveryBody {
   userId: string;
 }
 
+interface VerifyBody {
+  message: string;
+  signature: string;
+  address: string;
+}
+
 class KeyManagementController {
   private static instance: KeyManagementController;
 
@@ -81,6 +87,35 @@ class KeyManagementController {
       request.log.error(error);
       reply.code(500).send(
         ResponseBuilder.error(error?.message || 'Failed to recover share')
+      );
+    }
+  }
+
+  async verify(
+    request: FastifyRequest<{ Body: VerifyBody }>,
+    reply: FastifyReply
+  ): Promise<void> {
+    try {
+      const { message, signature, address } = request.body;
+      const result = await keyManagementService.verifySignature(message, signature, address);
+
+      if (result.valid) {
+        reply.send(
+          ResponseBuilder.success('Signature verified successfully', {
+            valid: true,
+            message,
+            recoveredAddress: result.recoveredAddress
+          })
+        );
+      } else {
+        reply.code(400).send(
+          ResponseBuilder.error('Signature verification failed')
+        );
+      }
+    } catch (error: any) {
+      request.log.error(error);
+      reply.code(500).send(
+        ResponseBuilder.error(error?.message || 'Failed to verify signature')
       );
     }
   }
