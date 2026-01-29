@@ -88,6 +88,19 @@ class InfisicalService {
     return secret.secretValue;
   }
 
+  private async updateSecret(type: StorageType, userId: string, value: string): Promise<void> {
+    await this.ensureReady(type);
+    const client = this.clients.get(type)!;
+    const projectId = this.projectIds.get(type)!;
+
+    await client.secrets().updateSecret(userId, {
+      environment: this.environment,
+      projectId,
+      secretValue: value,
+      secretPath: '/'
+    });
+  }
+
   async saveToHotStorage(userId: string, value: string): Promise<void> {
     return this.saveSecret(StorageType.HOT, userId, value);
   }
@@ -102,6 +115,14 @@ class InfisicalService {
 
   async getFromColdStorage(userId: string): Promise<string> {
     return this.getSecret(StorageType.COLD, userId);
+  }
+
+  async updateHotStorage(userId: string, value: string): Promise<void> {
+    return this.updateSecret(StorageType.HOT, userId, value);
+  }
+
+  async updateColdStorage(userId: string, value: string): Promise<void> {
+    return this.updateSecret(StorageType.COLD, userId, value);
   }
 }
 

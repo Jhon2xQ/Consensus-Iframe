@@ -69,14 +69,26 @@ class KeyManagementService {
     const secretBytes = await cryptoService.combineShares(shares);
     const privateKey = cryptoService.bytesToPrivateKey(secretBytes);
 
+    // Regenerar los shares con la misma clave privada
     const newSecretBytes = cryptoService.privateKeyToBytes(privateKey);
     const newShares = await cryptoService.splitSecret(newSecretBytes, 3, 2);
-    const [share11, share22, share33] = newShares.map((s) => cryptoService.encodeShare(s));
-    console.log(share22, share33);
+    const [newShare1, newShare2, newShare3] = newShares.map((s) => cryptoService.encodeShare(s));
 
-    // Cifrar el share1 recuperado antes de devolverlo
-    const encryptedShare1 = await encryptionService.encrypt(share11, userPassword);
-    return encryptedShare1;
+    // Cifrar los nuevos shares
+    const [encryptedNewShare1, encryptedNewShare2, encryptedNewShare3] = await Promise.all([
+      encryptionService.encrypt(newShare1, userPassword),
+      encryptionService.encrypt(newShare2, userPassword),
+      encryptionService.encrypt(newShare3, userPassword),
+    ]);
+
+    // Actualizar los shares en Hot Storage y Cold Storage
+    await Promise.all([
+      infisicalService.updateHotStorage(userId, encryptedNewShare2),
+      infisicalService.updateColdStorage(userId, encryptedNewShare3),
+    ]);
+
+    // Devolver el nuevo share1 cifrado
+    return encryptedNewShare1;
   }
 
   async verifySignature(
