@@ -6,9 +6,10 @@ const keyManagementRoutes: FastifyPluginAsync = async (fastify): Promise<void> =
     schema: {
       body: {
         type: 'object',
-        required: ['userId'],
+        required: ['userId', 'userPassword'],
         properties: {
-          userId: { type: 'string', minLength: 1 }
+          userId: { type: 'string', minLength: 1 },
+          userPassword: { type: 'string', minLength: 8 }
         }
       }
     }
@@ -18,10 +19,11 @@ const keyManagementRoutes: FastifyPluginAsync = async (fastify): Promise<void> =
     schema: {
       body: {
         type: 'object',
-        required: ['userId', 'share1', 'message'],
+        required: ['userId', 'share1', 'userPassword', 'message'],
         properties: {
           userId: { type: 'string', minLength: 1 },
           share1: { type: 'string', minLength: 1 },
+          userPassword: { type: 'string', minLength: 8 },
           message: { type: 'string', minLength: 1 }
         }
       }
@@ -32,9 +34,10 @@ const keyManagementRoutes: FastifyPluginAsync = async (fastify): Promise<void> =
     schema: {
       body: {
         type: 'object',
-        required: ['userId'],
+        required: ['userId', 'userPassword'],
         properties: {
-          userId: { type: 'string', minLength: 1 }
+          userId: { type: 'string', minLength: 1 },
+          userPassword: { type: 'string', minLength: 8 }
         }
       }
     }

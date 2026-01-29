@@ -4,16 +4,19 @@ import { ResponseBuilder } from '../types/response.types';
 
 interface CreateSharesBody {
   userId: string;
+  userPassword: string;
 }
 
 interface SignBody {
   userId: string;
   share1: string;
+  userPassword: string;
   message: string;
 }
 
 interface RecoveryBody {
   userId: string;
+  userPassword: string;
 }
 
 interface VerifyBody {
@@ -39,8 +42,8 @@ class KeyManagementController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const { userId } = request.body;
-      const result = await keyManagementService.createShares(userId);
+      const { userId, userPassword } = request.body;
+      const result = await keyManagementService.createShares(userId, userPassword);
       
       reply.code(201).send(
         ResponseBuilder.success('Shares created successfully', result)
@@ -58,8 +61,8 @@ class KeyManagementController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const { userId, share1, message } = request.body;
-      const signature = await keyManagementService.signMessage(userId, share1, message);
+      const { userId, share1, userPassword, message } = request.body;
+      const signature = await keyManagementService.signMessage(userId, share1, userPassword, message);
 
       reply.send(
         ResponseBuilder.success('Message signed successfully', { signature })
@@ -77,8 +80,8 @@ class KeyManagementController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const { userId } = request.body;
-      const share1 = await keyManagementService.recoverShare(userId);
+      const { userId, userPassword } = request.body;
+      const share1 = await keyManagementService.recoverShare(userId, userPassword);
 
       reply.send(
         ResponseBuilder.success('Share recovered successfully', { share1 })

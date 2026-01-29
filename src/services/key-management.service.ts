@@ -1,5 +1,6 @@
 import { cryptoService } from "./crypto.service";
 import { infisicalService } from "./infisical.service";
+import { encryptionService } from "./encryption.service";
 
 class KeyManagementService {
   private static instance: KeyManagementService;
@@ -13,35 +14,55 @@ class KeyManagementService {
     return KeyManagementService.instance;
   }
 
-  async createShares(userId: string): Promise<{ share1: string; address: string }> {
+  async createShares(userId: string, userPassword: string): Promise<{ share1: string; address: string }> {
     const wallet = cryptoService.generateWallet();
     const secretBytes = cryptoService.privateKeyToBytes(wallet.privateKey);
     const shares = await cryptoService.splitSecret(secretBytes, 3, 2);
 
     const [share1, share2, share3] = shares.map((s) => cryptoService.encodeShare(s));
 
-    await Promise.all([
-      infisicalService.saveToHotStorage(userId, share2),
-      infisicalService.saveToColdStorage(userId, share3),
+    // Cifrar todos los shares con la contraseña del usuario
+    const [encryptedShare1, encryptedShare2, encryptedShare3] = await Promise.all([
+      encryptionService.encrypt(share1, userPassword),
+      encryptionService.encrypt(share2, userPassword),
+      encryptionService.encrypt(share3, userPassword),
     ]);
 
-    return { share1, address: wallet.address };
+    // Guardar shares cifrados en Infisical
+    await Promise.all([
+      infisicalService.saveToHotStorage(userId, encryptedShare2),
+      infisicalService.saveToColdStorage(userId, encryptedShare3),
+    ]);
+
+    return { share1: encryptedShare1, address: wallet.address };
   }
 
-  async signMessage(userId: string, share1: string, message: string): Promise<string> {
-    const share2 = await infisicalService.getFromHotStorage(userId);
+  async signMessage(userId: string, share1: string, userPassword: string, message: string): Promise<string> {
+    const encryptedShare2 = await infisicalService.getFromHotStorage(userId);
 
-    const shares = [share1, share2].map((s) => cryptoService.decodeShare(s));
+    // Descifrar ambos shares
+    const [decryptedShare1, decryptedShare2] = await Promise.all([
+      encryptionService.decrypt(share1, userPassword),
+      encryptionService.decrypt(encryptedShare2, userPassword),
+    ]);
+
+    const shares = [decryptedShare1, decryptedShare2].map((s) => cryptoService.decodeShare(s));
     const secretBytes = await cryptoService.combineShares(shares);
     const privateKey = cryptoService.bytesToPrivateKey(secretBytes);
 
     return cryptoService.signMessage(privateKey, message);
   }
 
-  async recoverShare(userId: string): Promise<string> {
-    const [share2, share3] = await Promise.all([
+  async recoverShare(userId: string, userPassword: string): Promise<string> {
+    const [encryptedShare2, encryptedShare3] = await Promise.all([
       infisicalService.getFromHotStorage(userId),
       infisicalService.getFromColdStorage(userId),
+    ]);
+
+    // Descifrar shares
+    const [share2, share3] = await Promise.all([
+      encryptionService.decrypt(encryptedShare2, userPassword),
+      encryptionService.decrypt(encryptedShare3, userPassword),
     ]);
 
     const shares = [share2, share3].map((s) => cryptoService.decodeShare(s));
@@ -53,7 +74,9 @@ class KeyManagementService {
     const [share11, share22, share33] = newShares.map((s) => cryptoService.encodeShare(s));
     console.log(share22, share33);
 
-    return share11;
+    // Cifrar el share1 recuperado antes de devolverlo
+    const encryptedShare1 = await encryptionService.encrypt(share11, userPassword);
+    return encryptedShare1;
   }
 
   async verifySignature(
