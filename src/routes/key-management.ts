@@ -19,11 +19,10 @@ const keyManagementRoutes: FastifyPluginAsync = async (fastify): Promise<void> =
     schema: {
       body: {
         type: 'object',
-        required: ['userId', 'share1', 'userPassword', 'message'],
+        required: ['userId', 'share1', 'message'],
         properties: {
           userId: { type: 'string', minLength: 1 },
           share1: { type: 'string', minLength: 1 },
-          userPassword: { type: 'string', minLength: 8 },
           message: { type: 'string', minLength: 1 }
         }
       }

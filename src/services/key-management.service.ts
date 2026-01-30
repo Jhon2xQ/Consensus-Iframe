@@ -21,32 +21,24 @@ class KeyManagementService {
 
     const [share1, share2, share3] = shares.map((s) => cryptoService.encodeShare(s));
 
-    // Cifrar todos los shares con la contraseña del usuario
-    const [encryptedShare1, encryptedShare2, encryptedShare3] = await Promise.all([
-      encryptionService.encrypt(share1, userPassword),
-      encryptionService.encrypt(share2, userPassword),
-      encryptionService.encrypt(share3, userPassword),
-    ]);
+    // Cifrar solo el share3 (Cold Storage) con la contraseña del usuario
+    const encryptedShare3 = await encryptionService.encrypt(share3, userPassword);
 
-    // Guardar shares cifrados en Infisical
+    // Guardar share2 sin cifrar en Hot Storage y share3 cifrado en Cold Storage
     await Promise.all([
-      infisicalService.saveToHotStorage(userId, encryptedShare2),
+      infisicalService.saveToHotStorage(userId, share2),
       infisicalService.saveToColdStorage(userId, encryptedShare3),
     ]);
 
-    return { share1: encryptedShare1, address: wallet.address };
+    // Devolver share1 sin cifrar
+    return { share1, address: wallet.address };
   }
 
-  async signMessage(userId: string, share1: string, userPassword: string, message: string): Promise<string> {
-    const encryptedShare2 = await infisicalService.getFromHotStorage(userId);
+  async signMessage(userId: string, share1: string, message: string): Promise<string> {
+    const share2 = await infisicalService.getFromHotStorage(userId);
 
-    // Descifrar ambos shares
-    const [decryptedShare1, decryptedShare2] = await Promise.all([
-      encryptionService.decrypt(share1, userPassword),
-      encryptionService.decrypt(encryptedShare2, userPassword),
-    ]);
-
-    const shares = [decryptedShare1, decryptedShare2].map((s) => cryptoService.decodeShare(s));
+    // share1 y share2 ya están en base64, solo decodificar
+    const shares = [share1, share2].map((s) => cryptoService.decodeShare(s));
     const secretBytes = await cryptoService.combineShares(shares);
     const privateKey = cryptoService.bytesToPrivateKey(secretBytes);
 
@@ -54,16 +46,13 @@ class KeyManagementService {
   }
 
   async recoverShare(userId: string, userPassword: string): Promise<string> {
-    const [encryptedShare2, encryptedShare3] = await Promise.all([
+    const [share2, encryptedShare3] = await Promise.all([
       infisicalService.getFromHotStorage(userId),
       infisicalService.getFromColdStorage(userId),
     ]);
 
-    // Descifrar shares
-    const [share2, share3] = await Promise.all([
-      encryptionService.decrypt(encryptedShare2, userPassword),
-      encryptionService.decrypt(encryptedShare3, userPassword),
-    ]);
+    // Descifrar solo share3 (Cold Storage)
+    const share3 = await encryptionService.decrypt(encryptedShare3, userPassword);
 
     const shares = [share2, share3].map((s) => cryptoService.decodeShare(s));
     const secretBytes = await cryptoService.combineShares(shares);
@@ -74,21 +63,17 @@ class KeyManagementService {
     const newShares = await cryptoService.splitSecret(newSecretBytes, 3, 2);
     const [newShare1, newShare2, newShare3] = newShares.map((s) => cryptoService.encodeShare(s));
 
-    // Cifrar los nuevos shares
-    const [encryptedNewShare1, encryptedNewShare2, encryptedNewShare3] = await Promise.all([
-      encryptionService.encrypt(newShare1, userPassword),
-      encryptionService.encrypt(newShare2, userPassword),
-      encryptionService.encrypt(newShare3, userPassword),
-    ]);
+    // Cifrar solo el nuevo share3 (Cold Storage)
+    const encryptedNewShare3 = await encryptionService.encrypt(newShare3, userPassword);
 
-    // Actualizar los shares en Hot Storage y Cold Storage
+    // Actualizar los shares en Hot Storage (sin cifrar) y Cold Storage (cifrado)
     await Promise.all([
-      infisicalService.updateHotStorage(userId, encryptedNewShare2),
+      infisicalService.updateHotStorage(userId, newShare2),
       infisicalService.updateColdStorage(userId, encryptedNewShare3),
     ]);
 
-    // Devolver el nuevo share1 cifrado
-    return encryptedNewShare1;
+    // Devolver el nuevo share1 sin cifrar
+    return newShare1;
   }
 
   async verifySignature(
