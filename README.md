@@ -1,11 +1,12 @@
-# Cifrado Basado en Contraseña
+# Sistema de Gestión de Claves con Cifrado Basado en Contraseña
 
 ## Descripción
 
-Todos los shares generados por el sistema ahora están protegidos mediante cifrado basado en contraseña del usuario usando:
+Sistema de gestión de claves privadas de Ethereum usando Shamir Secret Sharing (SSS) con cifrado basado en contraseña del usuario:
 
-- **Argon2id**: Para derivación de claves (KDF)
-- **AES-128-GCM**: Para cifrado autenticado
+- **Argon2id**: Derivación de claves (KDF)
+- **AES-128-GCM**: Cifrado autenticado
+- **Shamir Secret Sharing**: División de claves en 3 shares (umbral 2)
 
 ## Parámetros de Seguridad
 
@@ -21,9 +22,11 @@ Todos los shares generados por el sistema ahora están protegidos mediante cifra
 - **IV**: 12 bytes aleatorios por operación
 - **Tag de autenticación**: Incluido automáticamente
 
-## Flujo de Operaciones
+## Endpoints
 
 ### 1. POST /create-shares
+
+Crea una nueva wallet de Ethereum y divide la clave privada en 3 shares cifrados.
 
 **Request:**
 ```json
@@ -33,15 +36,19 @@ Todos los shares generados por el sistema ahora están protegidos mediante cifra
 }
 ```
 
-**Proceso:**
-1. Genera wallet de Ethereum
-2. Divide la clave privada en 3 shares (umbral 2)
-3. **Cifra los 3 shares** con la contraseña del usuario
-4. Guarda share2 cifrado en Hot Storage
-5. Guarda share3 cifrado en Cold Storage
-6. Devuelve share1 cifrado
+**Validaciones:**
+- `userId`: string, mínimo 1 carácter (requerido)
+- `userPassword`: string, mínimo 8 caracteres (requerido)
 
-**Response:**
+**Proceso:**
+1. Genera wallet de Ethereum (clave privada + dirección)
+2. Divide la clave privada en 3 shares usando SSS (umbral 2)
+3. Cifra los 3 shares con la contraseña del usuario
+4. Guarda share2 cifrado en Hot Storage (Infisical)
+5. Guarda share3 cifrado en Cold Storage (Infisical)
+6. Devuelve share1 cifrado y la dirección de la wallet
+
+**Response (201):**
 ```json
 {
   "success": true,
@@ -53,26 +60,43 @@ Todos los shares generados por el sistema ahora están protegidos mediante cifra
 }
 ```
 
+**Response Error (500):**
+```json
+{
+  "success": false,
+  "error": "Failed to create shares"
+}
+```
+
+---
+
 ### 2. POST /sign
+
+Firma un mensaje usando la clave privada reconstruida desde share1 y share2.
 
 **Request:**
 ```json
 {
   "userId": "uuid-del-usuario",
   "share1": "base64-encrypted-share",
-  "userPassword": "contraseña-segura-del-usuario",
   "message": "mensaje-a-firmar"
 }
 ```
 
-**Proceso:**
-1. Obtiene share2 cifrado de Hot Storage
-2. **Descifra share1 y share2** con la contraseña
-3. Reconstruye la clave privada
-4. Firma el mensaje
-5. Descarta la clave privada de memoria
+**Validaciones:**
+- `userId`: string, mínimo 1 carácter (requerido)
+- `share1`: string, mínimo 1 carácter (requerido)
+- `message`: string, mínimo 1 carácter (requerido)
 
-**Response:**
+**Proceso:**
+1. Obtiene share2 cifrado de Hot Storage (Infisical)
+2. Descifra share1 (del request) usando la contraseña del usuario
+3. Descifra share2 (de Hot Storage) usando la contraseña del usuario
+4. Reconstruye la clave privada desde share1 + share2
+5. Firma el mensaje con la clave privada
+6. Descarta la clave privada de memoria inmediatamente
+
+**Response (200):**
 ```json
 {
   "success": true,
@@ -83,7 +107,19 @@ Todos los shares generados por el sistema ahora están protegidos mediante cifra
 }
 ```
 
+**Response Error (500):**
+```json
+{
+  "success": false,
+  "error": "Failed to sign message"
+}
+```
+
+---
+
 ### 3. POST /recovery
+
+Recupera y regenera todos los shares usando share2 y share3 de los storages.
 
 **Request:**
 ```json
@@ -93,19 +129,24 @@ Todos los shares generados por el sistema ahora están protegidos mediante cifra
 }
 ```
 
+**Validaciones:**
+- `userId`: string, mínimo 1 carácter (requerido)
+- `userPassword`: string, mínimo 8 caracteres (requerido)
+
 **Proceso:**
-1. Obtiene share2 y share3 cifrados de ambos storages
-2. **Descifra ambos shares** con la contraseña
-3. Reconstruye la clave privada
-4. **Regenera completamente los 3 shares** (nuevos valores)
-5. **Cifra los 3 nuevos shares** con la contraseña
-6. **Actualiza share2 en Hot Storage**
-7. **Actualiza share3 en Cold Storage**
-8. Devuelve el nuevo share1 cifrado
+1. Obtiene share2 cifrado de Hot Storage (Infisical)
+2. Obtiene share3 cifrado de Cold Storage (Infisical)
+3. Descifra share2 y share3 con la contraseña del usuario
+4. Reconstruye la clave privada desde share2 + share3
+5. Regenera completamente los 3 shares (nuevos valores)
+6. Cifra los 3 nuevos shares con la contraseña del usuario
+7. Actualiza share2 en Hot Storage
+8. Actualiza share3 en Cold Storage
+9. Devuelve el nuevo share1 cifrado
 
-**Importante:** Este endpoint regenera todos los shares, por lo que el share1 anterior quedará invalidado. El usuario debe guardar el nuevo share1 devuelto.
+**Importante:** Este endpoint regenera todos los shares. El share1 anterior quedará invalidado. El usuario debe guardar el nuevo share1 devuelto.
 
-**Response:**
+**Response (200):**
 ```json
 {
   "success": true,
@@ -115,6 +156,70 @@ Todos los shares generados por el sistema ahora están protegidos mediante cifra
   }
 }
 ```
+
+**Response Error (500):**
+```json
+{
+  "success": false,
+  "error": "Failed to recover share"
+}
+```
+
+---
+
+### 4. POST /verify
+
+Verifica la validez de una firma y recupera la dirección del firmante.
+
+**Request:**
+```json
+{
+  "message": "mensaje-original",
+  "signature": "0x...",
+  "address": "0x..."
+}
+```
+
+**Validaciones:**
+- `message`: string, mínimo 1 carácter (requerido)
+- `signature`: string, mínimo 1 carácter (requerido)
+- `address`: string, mínimo 1 carácter (requerido)
+
+**Proceso:**
+1. Recupera la dirección del firmante desde la firma
+2. Compara la dirección recuperada con la dirección proporcionada
+3. Devuelve el resultado de la verificación
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Signature verified successfully",
+  "data": {
+    "valid": true,
+    "message": "mensaje-original",
+    "recoveredAddress": "0x..."
+  }
+}
+```
+
+**Response Error (400):**
+```json
+{
+  "success": false,
+  "error": "Signature verification failed"
+}
+```
+
+**Response Error (500):**
+```json
+{
+  "success": false,
+  "error": "Failed to verify signature"
+}
+```
+
+---
 
 ## Formato de Datos Cifrados
 
@@ -131,6 +236,7 @@ Cada share cifrado se almacena en formato Base64 con la siguiente estructura:
 - **Autenticado**: GCM proporciona autenticación integrada
 - **Resistente a fuerza bruta**: Argon2id hace costoso probar contraseñas
 - **Salt único**: Cada cifrado usa un salt aleatorio diferente
+- **Umbral 2 de 3**: Se necesitan 2 shares para reconstruir la clave privada
 
 ## Manejo de Errores
 

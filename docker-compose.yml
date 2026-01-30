@@ -1,0 +1,96 @@
+version: "3.1"
+
+services:
+  # Servicio de la aplicación Fastify
+  fastify-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fastify-key-management
+    environment:
+      - NODE_ENV=production
+      - SECRETS_PATH=${SECRETS_PATH:-/app/secrets/secrets.json}
+      # Variables para Hot Storage (SDK usado en /create-shares y /recovery)
+      - INFISICAL_HOT_PROJECT_ID=${INFISICAL_PROJECT_ID}
+      - INFISICAL_HOT_CLIENT_ID=${INFISICAL_CLIENT_ID}
+      - INFISICAL_HOT_CLIENT_SECRET=${INFISICAL_CLIENT_SECRET}
+      # Variables para Cold Storage (SDK usado en todos los endpoints)
+      - INFISICAL_COLD_PROJECT_ID=${INFISICAL_COLD_PROJECT_ID}
+      - INFISICAL_COLD_CLIENT_ID=${INFISICAL_COLD_CLIENT_ID}
+      - INFISICAL_COLD_CLIENT_SECRET=${INFISICAL_COLD_CLIENT_SECRET}
+      - INFISICAL_ENVIRONMENT=${INFISICAL_ENV:-dev}
+    ports:
+      - "3000:3000"
+    volumes:
+      - infisical-secrets:/app/secrets:ro  # Montaje en modo solo lectura
+    networks:
+      - infisical-network
+    depends_on:
+      - infisical-agent
+    restart: unless-stopped
+
+  # Agente de Infisical para Hot Storage
+  infisical-agent:
+    image: infisical/cli:0.18.0
+    container_name: infisical-agent-hot
+    environment:
+      - INFISICAL_CLIENT_ID=${INFISICAL_CLIENT_ID}
+      - INFISICAL_CLIENT_SECRET=${INFISICAL_CLIENT_SECRET}
+      - INFISICAL_PROJECT_ID=${INFISICAL_PROJECT_ID}
+      - INFISICAL_ENV=${INFISICAL_ENV:-dev}
+    entrypoint: ["/bin/sh", "-c"]
+    command: 
+      - |
+        # 1. Crear directorios
+        mkdir -p /etc/infisical
+        mkdir -p /app-secrets
+        
+        # 2. Guardar credenciales para el agente
+        echo "$INFISICAL_CLIENT_ID" > /etc/infisical/client-id
+        echo "$INFISICAL_CLIENT_SECRET" > /etc/infisical/client-secret
+
+        # 3. Crear archivo de configuración (Polling 30s)
+        echo "infisical:
+          address: 'https://app.infisical.com'
+        auth:
+          type: 'universal-auth'
+          config:
+            client-id: '/etc/infisical/client-id'
+            client-secret: '/etc/infisical/client-secret'
+            remove_client_secret_on_read: false
+        sinks:
+          - type: 'file'
+            config:
+              path: '/app-secrets/access-token'
+        templates:
+          - source-path: '/etc/infisical/json.tmpl'
+            destination-path: '/app-secrets/secrets.json'
+            config:
+              polling-interval: 30s" > /etc/infisical/config.yaml
+
+        # 4. Plantilla para JSON (Lógica de comas corregida para ser válida)
+        echo '{
+        {{- with secret "'$INFISICAL_PROJECT_ID'" "'$INFISICAL_ENV'" "/" -}}
+        {{- range $index, $element := . -}}
+          {{- if $index }},{{ end }}
+          "{{ .Key }}": "{{ .Value }}"
+        {{- end -}}
+        {{- end -}}
+        }' > /etc/infisical/json.tmpl
+
+        echo "Iniciando Infisical Agent (Generando JSON en /app-secrets/secrets.json)..."
+        infisical agent --config=/etc/infisical/config.yaml
+    volumes:
+      - infisical-secrets:/app-secrets
+    networks:
+      - infisical-network
+    restart: always
+
+volumes:
+  infisical-secrets:
+    name: infisical-secrets
+
+networks:
+  infisical-network:
+    name: infisical-network
+    driver: bridge
