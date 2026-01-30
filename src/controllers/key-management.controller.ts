@@ -10,7 +10,6 @@ interface CreateSharesBody {
 interface SignBody {
   userId: string;
   share1: string;
-  userPassword: string;
   message: string;
 }
 
@@ -61,8 +60,8 @@ class KeyManagementController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const { userId, share1, userPassword, message } = request.body;
-      const signature = await keyManagementService.signMessage(userId, share1, userPassword, message);
+      const { userId, share1, message } = request.body;
+      const signature = await keyManagementService.signMessage(userId, share1, message);
 
       reply.send(
         ResponseBuilder.success('Message signed successfully', { signature })
