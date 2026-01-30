@@ -22,7 +22,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - infisical-secrets:/app/secrets:ro  # Montaje en modo solo lectura
+      - infisical-secrets:/app/secrets:ro # Montaje en modo solo lectura
     networks:
       - infisical-network
     depends_on:
@@ -39,12 +39,12 @@ services:
       - INFISICAL_PROJECT_ID=${INFISICAL_PROJECT_ID}
       - INFISICAL_ENV=${INFISICAL_ENV:-dev}
     entrypoint: ["/bin/sh", "-c"]
-    command: 
+    command:
       - |
         # 1. Crear directorios
         mkdir -p /etc/infisical
         mkdir -p /app-secrets
-        
+
         # 2. Guardar credenciales para el agente
         echo "$INFISICAL_CLIENT_ID" > /etc/infisical/client-id
         echo "$INFISICAL_CLIENT_SECRET" > /etc/infisical/client-secret
@@ -66,7 +66,7 @@ services:
           - source-path: '/etc/infisical/json.tmpl'
             destination-path: '/app-secrets/secrets.json'
             config:
-              polling-interval: 30s" > /etc/infisical/config.yaml
+              polling-interval: 60s" > /etc/infisical/config.yaml
 
         # 4. Plantilla para JSON (Lógica de comas corregida para ser válida)
         echo '{
