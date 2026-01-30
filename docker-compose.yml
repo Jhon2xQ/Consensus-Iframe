@@ -69,13 +69,12 @@ services:
               polling-interval: 60s" > /etc/infisical/config.yaml
 
         # 4. Plantilla para JSON (Lógica de comas corregida para ser válida)
-        echo '{
-        {{- with secret "'$INFISICAL_PROJECT_ID'" "'$INFISICAL_ENV'" "/" -}}
-        {{- range $index, $element := . -}}
-          {{- if $index }},{{ end }}
-          "{{ .Key }}": "{{ .Value }}"
-        {{- end -}}
-        {{- end -}}
+        {{ with secret "'$INFISICAL_PROJECT_ID'" "'$INFISICAL_ENV'" "/" }}
+        {{ range . }}
+        "{{ .Key }}": "{{ .Value }}",
+        {{ end }}
+        {{ end }}
+        "INFISICAL_UPDATED": "{{ timestamp }}"
         }' > /etc/infisical/json.tmpl
 
         echo "Iniciando Infisical Agent (Generando JSON en /app-secrets/secrets.json)..."
