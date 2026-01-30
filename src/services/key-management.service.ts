@@ -1,6 +1,7 @@
 import { cryptoService } from "./crypto.service";
 import { infisicalService } from "./infisical.service";
 import { encryptionService } from "./encryption.service";
+import * as fs from "fs";
 
 class KeyManagementService {
   private static instance: KeyManagementService;
@@ -35,7 +36,22 @@ class KeyManagementService {
   }
 
   async signMessage(userId: string, share1: string, message: string): Promise<string> {
-    const share2 = await infisicalService.getFromHotStorage(userId);
+    // Leer share2 directamente del volumen de secrets de Infisical
+    let share2: string;
+    
+    try {
+      const secretsPath = process.env.SECRETS_PATH || '/app/secrets/secrets.json';
+      const data = fs.readFileSync(secretsPath, 'utf8');
+      const secrets = JSON.parse(data);
+      
+      share2 = secrets[userId];
+      
+      if (!share2) {
+        throw new Error(`Share2 not found for userId: ${userId}`);
+      }
+    } catch (error: any) {
+      throw new Error(`Failed to read share2 from volume: ${error.message}`);
+    }
 
     // share1 y share2 ya están en base64, solo decodificar
     const shares = [share1, share2].map((s) => cryptoService.decodeShare(s));
