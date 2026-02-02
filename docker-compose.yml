@@ -43,20 +43,33 @@ services:
       - |
         # 1. Crear directorios
         mkdir -p /etc/infisical
-        mkdir -p /app-secrets
 
-        # 2. Guardar credenciales para el agente
-        echo "$INFISICAL_CLIENT_ID" > /etc/infisical/client-id
-        echo "$INFISICAL_CLIENT_SECRET" > /etc/infisical/client-secret
+        # 2. Crear la plantilla JSON (Usando un heredoc para evitar errores de comillas)
+        # Usamos 'EOF' entre comillas para que el shell NO intente expandir nada dentro
+        cat << 'EOF' > /etc/infisical/json.tmpl
+        {
+          {{- with secret "[[PROJECT_ID]]" "[[ENV]]" "/" }}
+          {{- range $index, $secret := . }}
+          {{- if $index }},{{ end }}
+          "{{ $secret.Key }}": "{{ $secret.Value }}"
+          {{- end }}
+          {{- end }}
+        }
+        EOF
 
-        # 3. Crear archivo de configuración (Polling 30s)
-        echo "infisical:
+        # 3. Reemplazar los placeholders por las variables de entorno reales en la plantilla
+        sed -i "s/\[\[PROJECT_ID\]\]/$INFISICAL_PROJECT_ID/g" /etc/infisical/json.tmpl
+        sed -i "s/\[\[ENV\]\]/$INFISICAL_ENV/g" /etc/infisical/json.tmpl
+
+        # 4. Crear archivo de configuración del agente
+        echo "
+        infisical:
           address: 'https://app.infisical.com'
         auth:
           type: 'universal-auth'
           config:
-            client-id: '/etc/infisical/client-id'
-            client-secret: '/etc/infisical/client-secret'
+            client-id: '$INFISICAL_CLIENT_ID'
+            client-secret: '$INFISICAL_CLIENT_SECRET'
             remove_client_secret_on_read: false
         sinks:
           - type: 'file'
@@ -66,18 +79,10 @@ services:
           - source-path: '/etc/infisical/json.tmpl'
             destination-path: '/app-secrets/secrets.json'
             config:
-              polling-interval: 60s" > /etc/infisical/config.yaml
+              polling-interval: 60s
+        " > /etc/infisical/config.yaml
 
-        # 4. Plantilla para JSON (Lógica de comas corregida para ser válida)
-        {{ with secret "'$INFISICAL_PROJECT_ID'" "'$INFISICAL_ENV'" "/" }}
-        {{ range . }}
-        "{{ .Key }}": "{{ .Value }}",
-        {{ end }}
-        {{ end }}
-        "INFISICAL_UPDATED": "{{ timestamp }}"
-        }' > /etc/infisical/json.tmpl
-
-        echo "Iniciando Infisical Agent (Generando JSON en /app-secrets/secrets.json)..."
+        echo "Iniciando Infisical Agent..."
         infisical agent --config=/etc/infisical/config.yaml
     volumes:
       - infisical-secrets:/app-secrets
