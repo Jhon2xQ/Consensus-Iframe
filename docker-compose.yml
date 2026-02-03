@@ -27,7 +27,7 @@ services:
     image: "infisical/cli:0.18.0"
     container_name: infisical-agent-config
     environment:
-      # Estos vienen de tu archivo .env local
+      # Asegúrate de que estas variables estén en tu .env
       - INFISICAL_CLIENT_ID=${AGENT_CLIENT_ID}
       - INFISICAL_CLIENT_SECRET=${AGENT_CLIENT_SECRET}
       - INFISICAL_PROJECT_ID=${AGENT_PROJECT_ID}
@@ -37,33 +37,27 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        # 1. Crear directorio de configuración
+        # 1. Crear directorio
         mkdir -p /etc/infisical
 
-        # 2. Guardar las credenciales en ARCHIVOS (Evita el error de ruta vacía)
-        echo "$INFISICAL_CLIENT_ID" > /etc/infisical/client-id
-        echo "$INFISICAL_CLIENT_SECRET" > /etc/infisical/client-secret
+        # 2. GUARDAR CREDENCIALES USANDO PRINTF (Sin saltos de línea)
+        # Esto es vital para evitar el error 401
+        printf "%s" "$INFISICAL_CLIENT_ID" > /etc/infisical/client-id
+        printf "%s" "$INFISICAL_CLIENT_SECRET" > /etc/infisical/client-secret
 
-        # 3. Crear la plantilla JSON
-        cat << 'EOF' > /etc/infisical/json.tmpl
-        {
-          {{- with secret "[[PROJECT_ID]]" "[[ENV]]" "/" }}
-          {{- range $index, $secret := . }}
+        # 3. Crear la plantilla JSON con la sintaxis exacta de tu ejemplo funcional
+        # Usamos comillas simples alrededor de las variables dentro del template
+        echo '{
+          {{- with secret "'$INFISICAL_PROJECT_ID'" "'$INFISICAL_ENV'" "/" -}}
+          {{- range $index, $secret := . -}}
           {{- if $index }},{{ end }}
           "{{ $secret.Key }}": "{{ $secret.Value }}"
-          {{- end }}
-          {{- end }}
-        }
-        EOF
+          {{- end -}}
+          {{- end -}}
+        }' > /etc/infisical/json.tmpl
 
-        # Reemplazar variables en la plantilla
-        sed -i "s/\[\[PROJECT_ID\]\]/$INFISICAL_PROJECT_ID/g" /etc/infisical/json.tmpl
-        sed -i "s/\[\[ENV\]\]/$INFISICAL_ENV/g" /etc/infisical/json.tmpl
-
-        # 4. Crear configuración del agente apuntando a los ARCHIVOS
-        # Nota: Usamos rutas de archivos en client-id y client-secret
-        echo "
-        infisical:
+        # 4. Crear configuración del agente
+        echo "infisical:
           address: 'https://app.infisical.com'
         auth:
           type: 'universal-auth'
@@ -79,10 +73,9 @@ services:
           - source-path: '/etc/infisical/json.tmpl'
             destination-path: '/app-secrets/config.json'
             config:
-              polling-interval: 60s
-        " > /etc/infisical/config.yaml
+              polling-interval: 60s" > /etc/infisical/config.yaml
 
-        echo "Iniciando Infisical Agent con Machine Identity..."
+        echo "Iniciando Infisical Agent corregido..."
         infisical agent --config=/etc/infisical/config.yaml
 
 volumes:
