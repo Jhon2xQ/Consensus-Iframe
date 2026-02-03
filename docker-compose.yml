@@ -5,7 +5,6 @@ services:
   config-agent:
     image: "infisical/cli:0.18.0"
     container_name: infisical-agent-config
-    # Sobrescribimos el entrypoint para poder usar comandos de shell
     entrypoint: ["/bin/sh", "-c"]
     environment:
       - AGENT_CLIENT_ID=${AGENT_CLIENT_ID}
@@ -18,22 +17,26 @@ services:
       - |
         mkdir -p /app/auth /app/config
 
-        # 1. Crear archivos de credenciales
-        echo "$$AGENT_CLIENT_ID" > /app/auth/client-id
-        echo "$$AGENT_CLIENT_SECRET" > /app/auth/client-secret
+        # 1. Guardar credenciales en archivos
+        echo "$AGENT_CLIENT_ID" > /app/auth/client-id
+        echo "$AGENT_CLIENT_SECRET" > /app/auth/client-secret
 
-        # 2. Crear el Template para generar un JSON válido
-        echo '{{- with secret "'$$AGENT_PROJECT_ID'" "'$$INFISICAL_ENV'" "/" -}}
+        # 2. Crear el Template (JSON compatible)
+        # Usamos cat para inyectar las variables de entorno directamente en el archivo del template
+        cat <<EOF > /app/config/json-template.tmpl
+        {{- with secret "$AGENT_PROJECT_ID" "$INFISICAL_ENV" "/" -}}
         {
-          {{- range $index, $pair := . -}}
-            {{- if $index -}},{{- end }}
-            "{{ $pair.Key }}": "{{ $pair.Value }}"
+          {{- range . }}
+          "{{ .Key }}": "{{ .Value }}",
           {{- end }}
+          "infisical_agent": "synced"
         }
-        {{- end -}}' > /app/config/json-template.tmpl
+        {{- end -}}
+        EOF
 
         # 3. Crear la configuración del agente
-        echo 'infisical:
+        cat <<EOF > /app/config/agent-config.yaml
+        infisical:
           address: "https://app.infisical.com"
         auth:
           type: "universal-auth"
@@ -49,16 +52,16 @@ services:
           - source-path: "/app/config/json-template.tmpl"
             destination-path: "/app-secrets/config.json"
             config:
-              polling-interval: 60s' > /app/config/agent-config.yaml
+              polling-interval: 60s
+        EOF
 
-        # 4. Ejecutar el agente (llamando al binario directamente)
+        # 4. Iniciar el agente
         infisical agent --config=/app/config/agent-config.yaml
 
   # --- TU APLICACIÓN FASTIFY ---
   fastify-app:
     build: .
     container_name: fastify-key-management
-    # También sobrescribimos entrypoint aquí para asegurar la espera del archivo
     entrypoint: ["/bin/sh", "-c"]
     environment:
       - HOT_PROJECT_ID=${HOT_PROJECT_ID}
@@ -75,11 +78,11 @@ services:
       - config-agent
     command:
       - |
-        echo "Esperando a que el agente genere config.json..."
+        echo "Esperando a config.json..."
         until [ -f /app/secrets/config.json ]; do
           sleep 2
         done
-        echo "Archivo config.json encontrado. Iniciando aplicación..."
+        echo "Archivo encontrado. Iniciando..."
         npm start
 
 volumes:
