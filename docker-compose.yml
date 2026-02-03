@@ -1,87 +1,92 @@
-version: "3.1"
+version: "3.8"
 
 services:
+  # --- AGENTE DE INFISICAL (Traductor de secretos) ---
+  config-agent:
+    image: "infisical/cli:0.18.0"
+    container_name: infisical-agent-config
+    environment:
+      # Variables que debes configurar en el panel de Coolify
+      - AGENT_CLIENT_ID=${AGENT_CLIENT_ID}
+      - AGENT_CLIENT_SECRET=${AGENT_CLIENT_SECRET}
+      - AGENT_PROJECT_ID=${AGENT_PROJECT_ID}
+      - INFISICAL_ENV=${INFISICAL_ENV:-dev}
+    volumes:
+      - "infisical-config-vol:/app-secrets"
+    command: >
+      sh -c "
+      mkdir -p /app/auth /app/config &&
+
+      # 1. Guardamos las credenciales del agente en archivos (como pediste)
+      echo \"${AGENT_CLIENT_ID}\" > /app/auth/client-id &&
+      echo \"${AGENT_CLIENT_SECRET}\" > /app/auth/client-secret &&
+
+      # 2. Creamos el Template que convierte el formato 'clave=valor' a 'JSON'
+      # Este bloque genera un JSON válido: {\"key1\":\"val1\", \"key2\":\"val2\"}
+      echo '{{- with secret \"${AGENT_PROJECT_ID}\" \"${INFISICAL_ENV}\" \"/\" -}}
+      {
+        {{- range $index, $pair := . -}}
+          {{- if $index -}},{{- end }}
+          \"{{ $pair.Key }}\": \"{{ $pair.Value }}\"
+        {{- end }}
+      }
+      {{- end -}}' > /app/config/json-template.tmpl &&
+
+      # 3. Creamos la configuración del agente
+      echo 'infisical:
+        address: \"https://app.infisical.com\"
+      auth:
+        type: \"universal-auth\"
+        config:
+          client-id: \"/app/auth/client-id\"
+          client-secret: \"/app/auth/client-secret\"
+          remove_client_secret_on_read: false
+      sinks:
+        - type: \"file\"
+          config:
+            path: \"/app-secrets/.access-token\"
+      templates:
+        - source-path: \"/app/config/json-template.tmpl\"
+          destination-path: \"/app-secrets/config.json\"
+          config:
+            polling-interval: 60s' > /app/config/agent-config.yaml &&
+
+      # 4. Lanzamos el agente
+      infisical agent --config=/app/config/agent-config.yaml
+      "
+
+  # --- TU APLICACIÓN FASTIFY ---
   fastify-app:
     build: .
     container_name: fastify-key-management
     environment:
-      # Credenciales para que el SDK de la App maneje el Share 2
+      # Credenciales para el SDK de la App (Share 2)
       - HOT_PROJECT_ID=${HOT_PROJECT_ID}
       - HOT_CLIENT_ID=${HOT_CLIENT_ID}
       - HOT_CLIENT_SECRET=${HOT_CLIENT_SECRET}
 
-      # Credenciales para que el SDK de la App maneje el Share 3
+      # Credenciales para el SDK de la App (Share 3)
       - COLD_PROJECT_ID=${COLD_PROJECT_ID}
       - COLD_CLIENT_ID=${COLD_CLIENT_ID}
       - COLD_CLIENT_SECRET=${COLD_CLIENT_SECRET}
 
-      # Ruta del JSON generado por el Agente (Configuración general)
+      # Configuración de ruta para que coincida con tu código fs.readFileSync
       - SECRETS_PATH=/app/secrets/config.json
       - INFISICAL_ENV=${INFISICAL_ENV}
     volumes:
       - "infisical-config-vol:/app/secrets:ro"
     depends_on:
       - config-agent
-
-  config-agent:
-    image: "infisical/cli:0.18.0"
-    container_name: infisical-agent-config
-    environment:
-      - INFISICAL_CLIENT_ID=${AGENT_CLIENT_ID}
-      - INFISICAL_CLIENT_SECRET=${AGENT_CLIENT_SECRET}
-      - INFISICAL_PROJECT_ID=${AGENT_PROJECT_ID}
-      - INFISICAL_ENV=${INFISICAL_ENV:-dev}
-    volumes:
-      - "infisical-config-vol:/app-secrets"
-    entrypoint:
-      - /bin/sh
-      - "-c"
-    command:
-      - |
-        # 1. Crear directorios
-        mkdir -p /etc/infisical
-        mkdir -p /app-secrets
-
-        # 2. Escribir credenciales limpiando posibles espacios o saltos de línea
-        printf "%s" "$INFISICAL_CLIENT_ID" > /etc/infisical/client-id
-        printf "%s" "$INFISICAL_CLIENT_SECRET" > /etc/infisical/client-secret
-
-        # 3. Crear la plantilla JSON (Sintaxis simplificada para shell)
-        echo '{
-          {{- with secret "'$INFISICAL_PROJECT_ID'" "'$INFISICAL_ENV'" "/" -}}
-          {{- range $index, $secret := . -}}
-          {{- if $index }},{{ end }}
-          "{{ $secret.Key }}": "{{ $secret.Value }}"
-          {{- end -}}
-          {{- end -}}
-        }' > /etc/infisical/json.tmpl
-
-        # 4. Crear configuración del agente
-        echo "infisical:
-          address: 'https://app.infisical.com'
-        auth:
-          type: 'universal-auth'
-          config:
-            client-id: '/etc/infisical/client-id'
-            client-secret: '/etc/infisical/client-secret'
-            remove_client_secret_on_read: false
-        sinks:
-          - type: 'file'
-            config:
-              path: '/app-secrets/access-token'
-        templates:
-          - source-path: '/etc/infisical/json.tmpl'
-            destination-path: '/app-secrets/config.json'
-            config:
-              polling-interval: 60s" > /etc/infisical/config.yaml
-
-        # Debug opcional: Comprobar longitud (quitar después)
-        echo "Validando longitud de credenciales..."
-        echo "ID length: $(wc -c < /etc/infisical/client-id)"
-        echo "Secret length: $(wc -c < /etc/infisical/client-secret)"
-
-        echo "Iniciando Infisical Agent..."
-        infisical agent --config=/etc/infisical/config.yaml
+    # El comando de espera asegura que el archivo JSON exista antes de que Node intente leerlo
+    command: >
+      sh -c "
+      echo 'Esperando que el agente genere el JSON...';
+      until [ -f /app/secrets/config.json ]; do 
+        sleep 1; 
+      done; 
+      echo 'JSON listo. Iniciando Fastify...';
+      npm start
+      "
 
 volumes:
   infisical-config-vol:
