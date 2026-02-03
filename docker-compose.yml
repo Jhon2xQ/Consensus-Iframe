@@ -27,26 +27,26 @@ services:
     image: "infisical/cli:0.18.0"
     container_name: infisical-agent-config
     environment:
-      # Asegúrate de que estas variables estén en tu .env
       - INFISICAL_CLIENT_ID=${AGENT_CLIENT_ID}
       - INFISICAL_CLIENT_SECRET=${AGENT_CLIENT_SECRET}
       - INFISICAL_PROJECT_ID=${AGENT_PROJECT_ID}
       - INFISICAL_ENV=${INFISICAL_ENV:-dev}
     volumes:
       - "infisical-config-vol:/app-secrets"
-    entrypoint: ["/bin/sh", "-c"]
+    entrypoint:
+      - /bin/sh
+      - "-c"
     command:
       - |
-        # 1. Crear directorio
+        # 1. Crear directorios
         mkdir -p /etc/infisical
+        mkdir -p /app-secrets
 
-        # 2. GUARDAR CREDENCIALES USANDO PRINTF (Sin saltos de línea)
-        # Esto es vital para evitar el error 401
+        # 2. Escribir credenciales limpiando posibles espacios o saltos de línea
         printf "%s" "$INFISICAL_CLIENT_ID" > /etc/infisical/client-id
         printf "%s" "$INFISICAL_CLIENT_SECRET" > /etc/infisical/client-secret
 
-        # 3. Crear la plantilla JSON con la sintaxis exacta de tu ejemplo funcional
-        # Usamos comillas simples alrededor de las variables dentro del template
+        # 3. Crear la plantilla JSON (Sintaxis simplificada para shell)
         echo '{
           {{- with secret "'$INFISICAL_PROJECT_ID'" "'$INFISICAL_ENV'" "/" -}}
           {{- range $index, $secret := . -}}
@@ -75,7 +75,12 @@ services:
             config:
               polling-interval: 60s" > /etc/infisical/config.yaml
 
-        echo "Iniciando Infisical Agent corregido..."
+        # Debug opcional: Comprobar longitud (quitar después)
+        echo "Validando longitud de credenciales..."
+        echo "ID length: $(wc -c < /etc/infisical/client-id)"
+        echo "Secret length: $(wc -c < /etc/infisical/client-secret)"
+
+        echo "Iniciando Infisical Agent..."
         infisical agent --config=/etc/infisical/config.yaml
 
 volumes:
