@@ -2,6 +2,7 @@ export interface ApiResponse<T = any> {
   success: boolean;
   message: string;
   data?: T;
+  timestamp: number;
 }
 
 export class ResponseBuilder {
@@ -9,14 +10,16 @@ export class ResponseBuilder {
     return {
       success: true,
       message,
-      data
+      data,
+      timestamp: Date.now()
     };
   }
 
   static error(message: string): ApiResponse {
     return {
       success: false,
-      message
+      message,
+      timestamp: Date.now()
     };
   }
 }
