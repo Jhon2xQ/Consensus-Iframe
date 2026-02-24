@@ -64,14 +64,14 @@ services:
     container_name: fastify-key-management
     entrypoint: ["/bin/sh", "-c"]
     environment:
-      - HOT_PROJECT_ID=${HOT_PROJECT_ID}
-      - HOT_CLIENT_ID=${HOT_CLIENT_ID}
-      - HOT_CLIENT_SECRET=${HOT_CLIENT_SECRET}
-      - COLD_PROJECT_ID=${COLD_PROJECT_ID}
-      - COLD_CLIENT_ID=${COLD_CLIENT_ID}
-      - COLD_CLIENT_SECRET=${COLD_CLIENT_SECRET}
+      - INFISICAL_HOT_PROJECT_ID=${HOT_PROJECT_ID}
+      - INFISICAL_HOT_CLIENT_ID=${HOT_CLIENT_ID}
+      - INFISICAL_HOT_CLIENT_SECRET=${HOT_CLIENT_SECRET}
+      - INFISICAL_COLD_PROJECT_ID=${COLD_PROJECT_ID}
+      - INFISICAL_COLD_CLIENT_ID=${COLD_CLIENT_ID}
+      - INFISICAL_COLD_CLIENT_SECRET=${COLD_CLIENT_SECRET}
       - SECRETS_PATH=/app/secrets/config.json
-      - INFISICAL_ENV=${INFISICAL_ENV}
+      - INFISICAL_ENVIRONMENT=${INFISICAL_ENV}
       - CORS_ORIGIN=${CORS_ORIGIN}
     volumes:
       - "infisical-config-vol:/app/secrets:ro"
