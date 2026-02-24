@@ -72,6 +72,7 @@ services:
       - COLD_CLIENT_SECRET=${COLD_CLIENT_SECRET}
       - SECRETS_PATH=/app/secrets/config.json
       - INFISICAL_ENV=${INFISICAL_ENV}
+      - CORS_ORIGIN=${CORS_ORIGIN}
     volumes:
       - "infisical-config-vol:/app/secrets:ro"
     depends_on:
