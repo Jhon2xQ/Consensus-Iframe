@@ -19,6 +19,7 @@
   "license": "ISC",
   "dependencies": {
     "@fastify/autoload": "^6.0.0",
+    "@fastify/cors": "^11.2.0",
     "@fastify/sensible": "^6.0.0",
     "@infisical/sdk": "^4.0.5",
     "@noble/hashes": "^2.0.1",
@@ -31,7 +32,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.8",
-    "c8": "^10.1.2",
+    "c8": "^11.0.0",
     "concurrently": "^9.0.0",
     "fastify-tsconfig": "^3.0.0",
     "ts-node": "^10.4.0",
