@@ -7,6 +7,7 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
+
 RUN npx prisma generate
 RUN npm run build:ts
 
@@ -17,23 +18,23 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Dependencias del sistema para Prisma
 RUN apk add --no-cache openssl libc6-compat
 
 COPY package*.json ./
 RUN npm ci --only=production && npm cache clean --force
 
-# ==================== COPIAR ARCHIVOS IMPORTANTES ====================
+# ==================== COPIAR ARCHIVOS ====================
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 
-# ←←← AQUÍ ENTRA TU entrypoint.sh
-COPY entrypoint.sh ./
+# ←←← COPIA OBLIGATORIA para Prisma 7
+COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 
-# Dar permisos de ejecución al entrypoint
+# Copiar entrypoint
+COPY entrypoint.sh ./
 RUN chmod +x ./entrypoint.sh
 
-# Crear usuario no-root (buena práctica)
+# Usuario no-root
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nodejs
 RUN chown -R nodejs:nodejs /app
@@ -42,5 +43,4 @@ USER nodejs
 
 EXPOSE 3000
 
-# Usar el entrypoint.sh como punto de entrada
 ENTRYPOINT ["./entrypoint.sh"]
