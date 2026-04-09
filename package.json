@@ -20,6 +20,8 @@
     "@fastify/sensible": "^6.0.0",
     "@infisical/sdk": "^4.0.5",
     "@noble/hashes": "^2.0.1",
+    "@prisma/adapter-pg": "^7.7.0",
+    "@prisma/client": "^7.7.0",
     "dotenv": "^17.4.1",
     "ethers": "^6.16.0",
     "fastify": "^5.0.0",
@@ -36,6 +38,6 @@
     "fastify-tsconfig": "^3.0.0",
     "prisma": "^7.7.0",
     "ts-node": "^10.4.0",
-    "typescript": "~5.9.2"
+    "typescript": "^5.8.3"
   }
 }

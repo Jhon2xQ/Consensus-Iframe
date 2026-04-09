@@ -70,3 +70,4 @@ dist
 .env.*.local
 
 /generated/prisma
+/generated

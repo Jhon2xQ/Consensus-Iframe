@@ -1,7 +1,5 @@
 version: "3.8"
-
 services:
-  # --- POSTGRESQL (HOT STORAGE) ---
   postgres:
     image: postgres:17-alpine
     container_name: postgres-hot-storage
@@ -19,7 +17,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # --- TU APLICACIÓN FASTIFY ---
   fastify-app:
     build: .
     container_name: fastify-key-management
@@ -30,13 +27,11 @@ services:
       - INFISICAL_COLD_CLIENT_SECRET=${INFISICAL_COLD_CLIENT_SECRET}
       - INFISICAL_ENVIRONMENT=${INFISICAL_ENVIRONMENT}
       - CORS_ORIGIN=${CORS_ORIGIN}
+    ports:
+      - "3000:3000"
     depends_on:
       postgres:
         condition: service_healthy
-    command:
-      - |
-        npx prisma migrate deploy
-        npm start
 
 volumes:
   postgres-data:

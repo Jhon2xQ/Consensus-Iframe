@@ -1,5 +1,5 @@
-import { argon2id } from '@noble/hashes/argon2.js';
-import { randomBytes } from 'crypto';
+import { argon2id } from "@noble/hashes/argon2.js";
+import { randomBytes } from "crypto";
 
 class EncryptionService {
   private static instance: EncryptionService;
@@ -42,24 +42,18 @@ class EncryptionService {
     const key = this.deriveKey(password, salt);
 
     // Importar la clave para Web Crypto API
-    const cryptoKey = await crypto.subtle.importKey(
-      'raw',
-      key,
-      { name: 'AES-GCM' },
-      false,
-      ['encrypt']
-    );
+    const cryptoKey = await crypto.subtle.importKey("raw", key, { name: "AES-GCM" }, false, ["encrypt"]);
 
     // Cifrar
     const encoder = new TextEncoder();
     const dataBytes = encoder.encode(data);
     const encrypted = await crypto.subtle.encrypt(
       {
-        name: 'AES-GCM',
+        name: "AES-GCM",
         iv: iv,
       },
       cryptoKey,
-      dataBytes
+      dataBytes,
     );
 
     // Combinar: salt (16) + iv (12) + ciphertext + authTag (incluido en encrypted)
@@ -68,14 +62,14 @@ class EncryptionService {
     result.set(iv, salt.length);
     result.set(new Uint8Array(encrypted), salt.length + iv.length);
 
-    return Buffer.from(result).toString('base64');
+    return Buffer.from(result).toString("base64");
   }
 
   /**
    * Descifra datos usando AES-128-GCM
    */
   async decrypt(encryptedData: string, password: string): Promise<string> {
-    const data = Buffer.from(encryptedData, 'base64');
+    const data = Buffer.from(encryptedData, "base64");
 
     // Extraer componentes
     const salt = data.subarray(0, this.SALT_LENGTH);
@@ -86,29 +80,23 @@ class EncryptionService {
     const key = this.deriveKey(password, salt);
 
     // Importar la clave
-    const cryptoKey = await crypto.subtle.importKey(
-      'raw',
-      key,
-      { name: 'AES-GCM' },
-      false,
-      ['decrypt']
-    );
+    const cryptoKey = await crypto.subtle.importKey("raw", key, { name: "AES-GCM" }, false, ["decrypt"]);
 
     // Descifrar
     try {
       const decrypted = await crypto.subtle.decrypt(
         {
-          name: 'AES-GCM',
+          name: "AES-GCM",
           iv: iv,
         },
         cryptoKey,
-        ciphertext
+        ciphertext,
       );
 
       const decoder = new TextDecoder();
       return decoder.decode(decrypted);
     } catch (error) {
-      throw new Error('Decryption failed: Invalid password or corrupted data');
+      throw new Error("Decryption failed: Invalid password or corrupted data");
     }
   }
 }
