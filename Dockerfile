@@ -25,7 +25,7 @@ RUN npm ci --only=production && npm cache clean --force
 
 # ==================== COPIAR ARCHIVOS IMPORTANTES ====================
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/src/prisma ./src/prisma
+COPY --from=builder /app/prisma ./prisma
 
 # ←←← AQUÍ ENTRA TU entrypoint.sh
 COPY entrypoint.sh ./
