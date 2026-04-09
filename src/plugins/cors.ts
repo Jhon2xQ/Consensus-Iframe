@@ -1,15 +1,9 @@
 import fp from 'fastify-plugin'
 import cors, { FastifyCorsOptions } from '@fastify/cors'
 
-/**
- * This plugin enables CORS support
- * 
- * @see https://github.com/fastify/fastify-cors
- */
 export default fp<FastifyCorsOptions>(async (fastify) => {
   const corsOrigin = process.env.CORS_ORIGIN || '*'
   
-  // Parse comma-separated origins
   const origin = corsOrigin === '*' 
     ? '*' 
     : corsOrigin.split(',').map(o => o.trim())

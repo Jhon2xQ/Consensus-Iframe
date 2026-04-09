@@ -1,15 +1,10 @@
 import { InfisicalSDK } from '@infisical/sdk';
 
-enum StorageType {
-  HOT = 'hot',
-  COLD = 'cold'
-}
-
 class InfisicalService {
   private static instance: InfisicalService;
-  private clients: Map<StorageType, InfisicalSDK> = new Map();
-  private projectIds: Map<StorageType, string> = new Map();
-  private authenticated: Set<StorageType> = new Set();
+  private client: InfisicalSDK | null = null;
+  private projectId: string | null = null;
+  private authenticated: boolean = false;
   private readonly environment: string;
 
   private constructor() {
@@ -23,47 +18,43 @@ class InfisicalService {
     return InfisicalService.instance;
   }
 
-  private initializeClient(type: StorageType): void {
-    if (this.clients.has(type)) return;
+  private initializeClient(): void {
+    if (this.client) return;
 
-    const client = new InfisicalSDK();
-    const projectId = process.env[`INFISICAL_${type.toUpperCase()}_PROJECT_ID`];
-    
+    const projectId = process.env.INFISICAL_COLD_PROJECT_ID;
     if (!projectId) {
-      throw new Error(`Missing ${type} storage project ID`);
+      throw new Error('Missing cold storage project ID');
     }
 
-    this.clients.set(type, client);
-    this.projectIds.set(type, projectId);
+    this.client = new InfisicalSDK();
+    this.projectId = projectId;
   }
 
-  private async authenticate(type: StorageType): Promise<void> {
-    const client = this.clients.get(type);
-    if (!client) throw new Error(`Client not initialized for ${type} storage`);
+  private async authenticate(): Promise<void> {
+    if (!this.client) throw new Error('Client not initialized for cold storage');
 
-    const clientId = process.env[`INFISICAL_${type.toUpperCase()}_CLIENT_ID`];
-    const clientSecret = process.env[`INFISICAL_${type.toUpperCase()}_CLIENT_SECRET`];
+    const clientId = process.env.INFISICAL_COLD_CLIENT_ID;
+    const clientSecret = process.env.INFISICAL_COLD_CLIENT_SECRET;
 
     if (!clientId || !clientSecret) {
-      throw new Error(`Missing ${type} storage credentials`);
+      throw new Error('Missing cold storage credentials');
     }
 
-    await client.auth().universalAuth.login({ clientId, clientSecret });
-    this.authenticated.add(type);
+    await this.client.auth().universalAuth.login({ clientId, clientSecret });
+    this.authenticated = true;
   }
 
-  private async ensureReady(type: StorageType): Promise<void> {
-    this.initializeClient(type);
-    
-    if (!this.authenticated.has(type)) {
-      await this.authenticate(type);
+  private async ensureReady(): Promise<void> {
+    this.initializeClient();
+    if (!this.authenticated) {
+      await this.authenticate();
     }
   }
 
-  private async saveSecret(type: StorageType, userId: string, value: string): Promise<void> {
-    await this.ensureReady(type);
-    const client = this.clients.get(type)!;
-    const projectId = this.projectIds.get(type)!;
+  async saveToColdStorage(userId: string, value: string): Promise<void> {
+    await this.ensureReady();
+    const client = this.client!;
+    const projectId = this.projectId!;
 
     await client.secrets().createSecret(userId, {
       environment: this.environment,
@@ -73,10 +64,10 @@ class InfisicalService {
     });
   }
 
-  private async getSecret(type: StorageType, userId: string): Promise<string> {
-    await this.ensureReady(type);
-    const client = this.clients.get(type)!;
-    const projectId = this.projectIds.get(type)!;
+  async getFromColdStorage(userId: string): Promise<string> {
+    await this.ensureReady();
+    const client = this.client!;
+    const projectId = this.projectId!;
 
     const secret = await client.secrets().getSecret({
       environment: this.environment,
@@ -88,10 +79,10 @@ class InfisicalService {
     return secret.secretValue;
   }
 
-  private async updateSecret(type: StorageType, userId: string, value: string): Promise<void> {
-    await this.ensureReady(type);
-    const client = this.clients.get(type)!;
-    const projectId = this.projectIds.get(type)!;
+  async updateColdStorage(userId: string, value: string): Promise<void> {
+    await this.ensureReady();
+    const client = this.client!;
+    const projectId = this.projectId!;
 
     await client.secrets().updateSecret(userId, {
       environment: this.environment,
@@ -99,30 +90,6 @@ class InfisicalService {
       secretValue: value,
       secretPath: '/'
     });
-  }
-
-  async saveToHotStorage(userId: string, value: string): Promise<void> {
-    return this.saveSecret(StorageType.HOT, userId, value);
-  }
-
-  async saveToColdStorage(userId: string, value: string): Promise<void> {
-    return this.saveSecret(StorageType.COLD, userId, value);
-  }
-
-  async getFromHotStorage(userId: string): Promise<string> {
-    return this.getSecret(StorageType.HOT, userId);
-  }
-
-  async getFromColdStorage(userId: string): Promise<string> {
-    return this.getSecret(StorageType.COLD, userId);
-  }
-
-  async updateHotStorage(userId: string, value: string): Promise<void> {
-    return this.updateSecret(StorageType.HOT, userId, value);
-  }
-
-  async updateColdStorage(userId: string, value: string): Promise<void> {
-    return this.updateSecret(StorageType.COLD, userId, value);
   }
 }
 

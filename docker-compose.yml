@@ -1,90 +1,42 @@
 version: "3.8"
 
 services:
-  # --- AGENTE DE INFISICAL ---
-  config-agent:
-    image: "infisical/cli:0.18.0"
-    container_name: infisical-agent-config
-    entrypoint: ["/bin/sh", "-c"]
+  # --- POSTGRESQL (HOT STORAGE) ---
+  postgres:
+    image: postgres:17-alpine
+    container_name: postgres-hot-storage
     environment:
-      - AGENT_CLIENT_ID=${AGENT_CLIENT_ID}
-      - AGENT_CLIENT_SECRET=${AGENT_CLIENT_SECRET}
-      - AGENT_PROJECT_ID=${AGENT_PROJECT_ID}
-      - INFISICAL_ENV=${INFISICAL_ENV:-dev}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    ports:
+      - "5432"
     volumes:
-      - "infisical-config-vol:/app-secrets"
-    command:
-      - |
-        mkdir -p /app/auth /app/config
-
-        # 1. Guardar credenciales en archivos
-        echo "$AGENT_CLIENT_ID" > /app/auth/client-id
-        echo "$AGENT_CLIENT_SECRET" > /app/auth/client-secret
-
-        # 2. Crear el Template (JSON compatible)
-        # Usamos cat para inyectar las variables de entorno directamente en el archivo del template
-        cat <<EOF > /app/config/json-template.tmpl
-        {{- with secret "$AGENT_PROJECT_ID" "$INFISICAL_ENV" "/" -}}
-        {
-          {{- range . }}
-          "{{ .Key }}": "{{ .Value }}",
-          {{- end }}
-          "infisical_agent": "synced"
-        }
-        {{- end -}}
-        EOF
-
-        # 3. Crear la configuración del agente
-        cat <<EOF > /app/config/agent-config.yaml
-        infisical:
-          address: "https://app.infisical.com"
-        auth:
-          type: "universal-auth"
-          config:
-            client-id: "/app/auth/client-id"
-            client-secret: "/app/auth/client-secret"
-            remove_client_secret_on_read: false
-        sinks:
-          - type: "file"
-            config:
-              path: "/app-secrets/.access-token"
-        templates:
-          - source-path: "/app/config/json-template.tmpl"
-            destination-path: "/app-secrets/config.json"
-            config:
-              polling-interval: 60s
-        EOF
-
-        # 4. Iniciar el agente
-        infisical agent --config=/app/config/agent-config.yaml
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-keymanagement}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   # --- TU APLICACIÓN FASTIFY ---
   fastify-app:
     build: .
     container_name: fastify-key-management
-    entrypoint: ["/bin/sh", "-c"]
     environment:
-      - INFISICAL_HOT_PROJECT_ID=${HOT_PROJECT_ID}
-      - INFISICAL_HOT_CLIENT_ID=${HOT_CLIENT_ID}
-      - INFISICAL_HOT_CLIENT_SECRET=${HOT_CLIENT_SECRET}
-      - INFISICAL_COLD_PROJECT_ID=${COLD_PROJECT_ID}
-      - INFISICAL_COLD_CLIENT_ID=${COLD_CLIENT_ID}
-      - INFISICAL_COLD_CLIENT_SECRET=${COLD_CLIENT_SECRET}
-      - SECRETS_PATH=/app/secrets/config.json
-      - INFISICAL_ENVIRONMENT=${INFISICAL_ENV}
+      - DATABASE_URL=${DATABASE_URL}
+      - INFISICAL_COLD_PROJECT_ID=${INFISICAL_COLD_PROJECT_ID}
+      - INFISICAL_COLD_CLIENT_ID=${INFISICAL_COLD_CLIENT_ID}
+      - INFISICAL_COLD_CLIENT_SECRET=${INFISICAL_COLD_CLIENT_SECRET}
+      - INFISICAL_ENVIRONMENT=${INFISICAL_ENVIRONMENT}
       - CORS_ORIGIN=${CORS_ORIGIN}
-    volumes:
-      - "infisical-config-vol:/app/secrets:ro"
     depends_on:
-      - config-agent
+      postgres:
+        condition: service_healthy
     command:
       - |
-        echo "Esperando a config.json..."
-        until [ -f /app/secrets/config.json ]; do
-          sleep 2
-        done
-        echo "Archivo encontrado. Iniciando..."
+        npx prisma migrate deploy
         npm start
 
 volumes:
-  infisical-config-vol:
+  postgres-data:

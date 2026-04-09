@@ -1,6 +1,6 @@
 # API REST - Sistema de Gestión de Claves con Shamir Secret Sharing
 
-API REST para la gestión segura de claves privadas de Ethereum utilizando Shamir Secret Sharing (SSS), cifrado basado en contraseña con Argon2id y AES-128-GCM, con almacenamiento distribuido en Infisical (Hot Storage y Cold Storage).
+API REST para la gestión segura de claves privadas de Ethereum utilizando Shamir Secret Sharing (SSS), cifrado basado en contraseña con Argon2id y AES-128-GCM, con almacenamiento distribuido en PostgreSQL (Hot Storage) e Infisical (Cold Storage).
 
 ---
 
@@ -52,7 +52,7 @@ Crea una nueva wallet de Ethereum y divide la clave privada en 3 shares cifrados
 
 ### 2. POST /sign
 
-Firma un mensaje usando la clave privada reconstruida desde share1 (proporcionado) y share2 (Hot Storage).
+Firma un mensaje usando la clave privada reconstruida desde share1 (proporcionado) y share2 (Hot Storage - PostgreSQL).
 
 **URL:** `/sign`
 
@@ -97,7 +97,7 @@ Firma un mensaje usando la clave privada reconstruida desde share1 (proporcionad
 
 ### 3. POST /recovery
 
-Recupera el share1 regenerando todos los shares usando share2 (Hot Storage) y share3 (Cold Storage).
+Recupera el share1 regenerando todos los shares usando share2 (Hot Storage - PostgreSQL) y share3 (Cold Storage - Infisical).
 
 **URL:** `/recovery`
 
@@ -113,7 +113,7 @@ Recupera el share1 regenerando todos los shares usando share2 (Hot Storage) y sh
 
 **Parámetros:**
 - `userId` (string, requerido): Identificador único del usuario. Mínimo 1 carácter.
-- `userPassword` (string, requerido): Contraseña del usuario para descifrar los shares. Mínimo 8 caracteres.
+- `userPassword` (string, requerido): Contraseña del usuario para descifrar share3. Mínimo 8 caracteres.
 
 **Response Exitoso (200):**
 ```json

@@ -8,6 +8,20 @@ Sistema de gestión de claves privadas de Ethereum usando Shamir Secret Sharing 
 - **AES-128-GCM**: Cifrado autenticado
 - **Shamir Secret Sharing**: División de claves en 3 shares (umbral 2)
 
+## Arquitectura de Almacenamiento
+
+Los 3 shares se almacenan de forma distribuida:
+
+| Share | Almacenamiento | Tecnología | Cifrado |
+|-------|---------------|------------|---------|
+| share1 | Cliente (usuario) | Devuelto en respuesta | Sin cifrar (el usuario lo guarda) |
+| share2 | Hot Storage | PostgreSQL | Sin cifrar (base de datos interna) |
+| share3 | Cold Storage | Infisical | Cifrado con contraseña del usuario |
+
+**Hot Storage (PostgreSQL):** Almacena share2 en una base de datos PostgreSQL propia. Acceso rápido y control total sobre los datos.
+
+**Cold Storage (Infisical):** Almacena share3 cifrado con la contraseña del usuario en Infisical como capa de seguridad adicional y recuperación ante desastres.
+
 ## Parámetros de Seguridad
 
 ### Argon2id
@@ -43,10 +57,10 @@ Crea una nueva wallet de Ethereum y divide la clave privada en 3 shares cifrados
 **Proceso:**
 1. Genera wallet de Ethereum (clave privada + dirección)
 2. Divide la clave privada en 3 shares usando SSS (umbral 2)
-3. Cifra los 3 shares con la contraseña del usuario
-4. Guarda share2 cifrado en Hot Storage (Infisical)
+3. Cifra el share3 con la contraseña del usuario
+4. Guarda share2 en Hot Storage (PostgreSQL)
 5. Guarda share3 cifrado en Cold Storage (Infisical)
-6. Devuelve share1 cifrado y la dirección de la wallet
+6. Devuelve share1 y la dirección de la wallet
 
 **Response (201):**
 ```json
@@ -89,12 +103,11 @@ Firma un mensaje usando la clave privada reconstruida desde share1 y share2.
 - `message`: string, mínimo 1 carácter (requerido)
 
 **Proceso:**
-1. Obtiene share2 cifrado de Hot Storage (Infisical)
-2. Descifra share1 (del request) usando la contraseña del usuario
-3. Descifra share2 (de Hot Storage) usando la contraseña del usuario
-4. Reconstruye la clave privada desde share1 + share2
-5. Firma el mensaje con la clave privada
-6. Descarta la clave privada de memoria inmediatamente
+1. Obtiene share2 de Hot Storage (PostgreSQL)
+2. Decodifica share1 (del request) y share2 (de PostgreSQL)
+3. Reconstruye la clave privada desde share1 + share2
+4. Firma el mensaje con la clave privada
+5. Descarta la clave privada de memoria inmediatamente
 
 **Response (200):**
 ```json
@@ -134,15 +147,15 @@ Recupera y regenera todos los shares usando share2 y share3 de los storages.
 - `userPassword`: string, mínimo 8 caracteres (requerido)
 
 **Proceso:**
-1. Obtiene share2 cifrado de Hot Storage (Infisical)
+1. Obtiene share2 de Hot Storage (PostgreSQL)
 2. Obtiene share3 cifrado de Cold Storage (Infisical)
-3. Descifra share2 y share3 con la contraseña del usuario
+3. Descifra share3 con la contraseña del usuario
 4. Reconstruye la clave privada desde share2 + share3
 5. Regenera completamente los 3 shares (nuevos valores)
-6. Cifra los 3 nuevos shares con la contraseña del usuario
-7. Actualiza share2 en Hot Storage
-8. Actualiza share3 en Cold Storage
-9. Devuelve el nuevo share1 cifrado
+6. Cifra el nuevo share3 con la contraseña del usuario
+7. Actualiza share2 en Hot Storage (PostgreSQL)
+8. Actualiza share3 cifrado en Cold Storage (Infisical)
+9. Devuelve el nuevo share1
 
 **Importante:** Este endpoint regenera todos los shares. El share1 anterior quedará invalidado. El usuario debe guardar el nuevo share1 devuelto.
 
@@ -229,6 +242,28 @@ Cada share cifrado se almacena en formato Base64 con la siguiente estructura:
 [Salt (16 bytes)] + [IV (12 bytes)] + [Ciphertext + Auth Tag]
 ```
 
+## Base de Datos (PostgreSQL)
+
+La tabla `Share` en PostgreSQL almacena los shares del Hot Storage:
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| id | UUID | Identificador del usuario (PK) |
+| share | String | Share2 en formato base64 |
+| createdAt | DateTime | Fecha de creación |
+| updatedAt | DateTime | Fecha de última actualización |
+
+### Prisma Schema
+
+```prisma
+model Share {
+  id        String   @id @default(uuid())
+  share     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+```
+
 ## Seguridad
 
 - **Sin logs**: Las claves privadas y shares nunca se loguean
@@ -237,6 +272,7 @@ Cada share cifrado se almacena en formato Base64 con la siguiente estructura:
 - **Resistente a fuerza bruta**: Argon2id hace costoso probar contraseñas
 - **Salt único**: Cada cifrado usa un salt aleatorio diferente
 - **Umbral 2 de 3**: Se necesitan 2 shares para reconstruir la clave privada
+- **Hot Storage aislado**: PostgreSQL en contenedor propio, sin exposición innecesaria
 
 ## Manejo de Errores
 
@@ -247,3 +283,20 @@ Si la contraseña es incorrecta durante el descifrado:
   "error": "Decryption failed: Invalid password or corrupted data"
 }
 ```
+
+## Despliegue con Docker
+
+```bash
+# Construir e iniciar todos los servicios
+docker-compose up -d
+
+# Ver logs
+docker-compose logs -f
+
+# Detener servicios
+docker-compose down
+```
+
+El docker-compose incluye:
+- **postgres**: PostgreSQL 17 Alpine (Hot Storage) con healthcheck
+- **fastify-app**: Aplicación Fastify con migración automática de Prisma
