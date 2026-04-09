@@ -1,18 +1,18 @@
 #!/bin/sh
 set -e
 
-echo "=== Prisma EntryPoint Started ==="
+echo "=== Starting Application ==="
 echo "DATABASE_URL is set: ${DATABASE_URL:+YES}"
 
 if [ -z "$DATABASE_URL" ]; then
-  echo "❌ ERROR: DATABASE_URL no está definida en el contenedor"
+  echo "❌ ERROR: DATABASE_URL environment variable is missing!"
   exit 1
 fi
 
-echo "🚀 Ejecutando migraciones de Prisma..."
+echo "🚀 Running Prisma migrations..."
 npx prisma migrate deploy
 
-echo "✅ Migraciones completadas"
-echo "🎉 Iniciando la aplicación Fastify..."
+echo "✅ Migrations completed successfully"
+echo "🎉 Starting Fastify server..."
 
 exec node dist/app.js
